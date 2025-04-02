@@ -1,4 +1,5 @@
 ﻿using Backend_Development_Lab.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Backend_Development_Lab.Controllers
@@ -10,6 +11,7 @@ namespace Backend_Development_Lab.Controllers
         private static List<Point> points = new List<Point>();
 
         [HttpGet]
+        [Authorize]
         public IActionResult GetAllPoints()
         {
             return Ok(points);
