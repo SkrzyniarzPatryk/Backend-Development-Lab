@@ -1,0 +1,63 @@
+[Route("api/[controller]")]
+    [ApiController]
+    public class AuthController : ControllerBase
+    {
+        // ... (istniej¹cy konstruktor i metody Register, Login, GenerateJwtToken, GetMyInfo) ...
+
+        // NOWY ENDPOINT: Odczytuje ró¿ne dane z tokenu JWT
+        [HttpGet("token-details")]
+        [Authorize] // Wymaga wa¿nego tokenu JWT
+        public IActionResult GetTokenDetails()
+        {
+            // Sprawdzenie, czy u¿ytkownik jest uwierzytelniony (chocia¿ [Authorize] ju¿ to gwarantuje)
+            if (User?.Identity?.IsAuthenticated != true)
+            {
+                // Teoretycznie nie powinno siê zdarzyæ przy [Authorize]
+                return Unauthorized();
+            }
+
+            // Odczytanie podstawowych danych u¿ytkownika (jak w 'me')
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier); // lub JwtRegisteredClaimNames.Sub
+            var userName = User.FindFirstValue(ClaimTypes.Name);         // lub JwtRegisteredClaimNames.Name
+            var userEmail = User.FindFirstValue(ClaimTypes.Email);       // lub JwtRegisteredClaimNames.Email
+
+            // Odczytanie innych standardowych oœwiadczeñ JWT
+            var tokenId = User.FindFirstValue(JwtRegisteredClaimNames.Jti); // JTI - ID tokenu
+            var issuer = User.FindFirstValue(JwtRegisteredClaimNames.Iss);  // Issuer - Kto wyda³ token
+            var audience = User.FindFirstValue(JwtRegisteredClaimNames.Aud); // Audience - Dla kogo token jest przeznaczony
+
+            // Odczytanie czasów wa¿noœci (s¹ przechowywane jako Unix Timestamps)
+            var expirationTimeString = User.FindFirstValue(JwtRegisteredClaimNames.Exp);
+            var issuedAtTimeString = User.FindFirstValue(JwtRegisteredClaimNames.Iat);
+
+            DateTime? expirationTime = null;
+            if (long.TryParse(expirationTimeString, out long expSeconds))
+            {
+                expirationTime = DateTimeOffset.FromUnixTimeSeconds(expSeconds).UtcDateTime;
+            }
+
+             DateTime? issuedAtTime = null;
+            if (long.TryParse(issuedAtTimeString, out long iatSeconds))
+            {
+                issuedAtTime = DateTimeOffset.FromUnixTimeSeconds(iatSeconds).UtcDateTime;
+            }
+
+            // Mo¿emy te¿ pobraæ wszystkie oœwiadczenia jako s³ownik dla pe³nego obrazu
+            var allClaims = User.Claims.Select(c => new { c.Type, c.Value }).ToList();
+
+            // Zwrócenie zebranych informacji
+            var tokenDetails = new
+            {
+                UserId = userId,
+                Username = userName,
+                Email = userEmail,
+                TokenId = tokenId,
+                Issuer = issuer,
+                Audience = audience,
+                ExpiresAtUtc = expirationTime,
+                IssuedAtUtc = issuedAtTime,
+                AllClaims = allClaims // Lista wszystkich oœwiadczeñ
+            };
+
+            return Ok(tokenDetails);
+        }
