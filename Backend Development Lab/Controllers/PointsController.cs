@@ -9,12 +9,30 @@ namespace Backend_Development_Lab.Controllers
     public class PointsController : ControllerBase
     {
         private static List<Point> points = new List<Point>();
+        static PointsController()
+        {
+            for (int i = 1; i <= 20; i++)
+            {
+                points.Add(new Point
+                {
+                    Id = Guid.NewGuid(),
+                    Name = $"Sample Point {i}",
+                    Description = $"This is sample point {i}.",
+                    Category = $"Category{i % 3 + 1}",
+                    Position = new List<string> { $"Position{i}" },
+                    Images = new List<string> { $"image{i}.jpg" },
+                    UserId = $"user{i}",
+                    Rating = 4.0 + (i % 5) * 0.1,
+                    Reviews = 5 + i
+                });
+            }
+        }
 
         [HttpGet]
         [Authorize]
         public IActionResult GetAllPoints()
         {
-            return Ok(points);
+            return Ok(points, new {"key" = "halo" });
         }
 
         [HttpGet("{id}")]

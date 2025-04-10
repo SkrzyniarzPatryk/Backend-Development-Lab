@@ -12,7 +12,32 @@ namespace Backend_Development_Lab.Services
         private static readonly ConcurrentDictionary<Guid, User> _users = new ConcurrentDictionary<Guid, User>();
         private static readonly ConcurrentDictionary<string, Guid> _usernameIndex = new ConcurrentDictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, Guid> _emailIndex = new ConcurrentDictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-          
+
+        static UserService()
+        {
+            var user1 = new User
+            {
+                Id = Guid.NewGuid(),
+                Username = "patryk",
+                Email = "patryk@example.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("pass12")
+            };
+            var user2 = new User
+            {
+                Id = Guid.NewGuid(),
+                Username = "mateusz",
+                Email = "mateusz@example.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("pass12")
+            };
+
+            _users.TryAdd(user1.Id, user1);
+            _usernameIndex.TryAdd(user1.Username, user1.Id);
+            _emailIndex.TryAdd(user1.Email, user1.Id);
+
+            _users.TryAdd(user2.Id, user2);
+            _usernameIndex.TryAdd(user2.Username, user2.Id);
+            _emailIndex.TryAdd(user2.Email, user2.Id);
+        }
 
         public Task<User?> GetUserByUsernameAsync(string username)
         {
