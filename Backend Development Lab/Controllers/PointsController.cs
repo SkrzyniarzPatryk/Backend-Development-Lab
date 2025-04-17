@@ -1,6 +1,9 @@
-﻿using Backend_Development_Lab.Models;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Backend_Development_Lab.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Binders;
 
 namespace Backend_Development_Lab.Controllers
 {
@@ -32,7 +35,23 @@ namespace Backend_Development_Lab.Controllers
         [Authorize]
         public IActionResult GetAllPoints()
         {
-            return Ok(points, new {"key" = "halo" });
+            var userNameClaim = User.FindFirst(ClaimTypes.Name);
+            var userEmaClaim = User.FindFirstValue(ClaimTypes.Email);
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+
+            var tokken = Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+            var decodedToken = new JwtSecurityTokenHandler().ReadJwtToken(tokken);
+
+
+            Console.WriteLine($"Token: {tokken} \nPayload: {decodedToken}");
+
+            return Ok(new { punkty = points, 
+                user = new { 
+                    username = userNameClaim,
+                    id = userIdClaim,
+                    email = userEmaClaim
+            } });
         }
 
         [HttpGet("{id}")]

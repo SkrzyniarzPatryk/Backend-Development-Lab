@@ -20,7 +20,7 @@ namespace Backend_Development_Lab.Dtos
     public class LoginDto
     {
         [Required]
-        public required string Login { get; set; } // Może być Username lub Email
+        public required string Email { get; set; } // Może być Username lub Email
 
         [Required]
         public required string Password { get; set; }
