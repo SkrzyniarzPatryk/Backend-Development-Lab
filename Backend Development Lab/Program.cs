@@ -126,25 +126,49 @@ builder.Services.AddAuthentication(options =>
 })
 .AddGoogle(options =>
 {
-    options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? throw new InvalidOperationException("Google ClientId not configured");
-    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? throw new InvalidOperationException("Google ClientSecret not configured");
+options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? throw new InvalidOperationException("Google ClientId not configured");
+options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? throw new InvalidOperationException("Google ClientSecret not configured");
 
-    // Opcjonalnie: Poproœ o dodatkowe zakresy (scopes)
-    options.Scope.Add("profile"); // Domyœlnie zawiera openid, email, profile
-    options.Scope.Add("openid");
-    options.Scope.Add("email");
+// Opcjonalnie: Zapisz tokeny otrzymane od Google (access_token, refresh_token)
+// Przydatne, jeœli chcesz póŸniej wywo³ywaæ API Google w imieniu u¿ytkownika
+options.SaveTokens = true;
 
-    // Opcjonalnie: Zapisz tokeny otrzymane od Google (access_token, refresh_token)
-    // Przydatne, jeœli chcesz póŸniej wywo³ywaæ API Google w imieniu u¿ytkownika
-    options.SaveTokens = true;
+// Okreœlamy, ¿e po udanym logowaniu Google, u¿ytkownik ma byæ zalogowany
+// do naszego systemu za pomoc¹ schematu ciasteczkowego (tymczasowo)
+options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 
-    // Okreœlamy, ¿e po udanym logowaniu Google, u¿ytkownik ma byæ zalogowany
-    // do naszego systemu za pomoc¹ schematu ciasteczkowego (tymczasowo)
-    options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    //options.CallbackPath = "/api/Auth/external-callback";
+// Opcjonalnie: Poproœ o dodatkowe zakresy (scopes)
+options.Scope.Add("profile"); // Domyœlnie zawiera openid, email, profile
+options.Scope.Add("openid");
+options.Scope.Add("email");
 
     options.Events = new Microsoft.AspNetCore.Authentication.OAuth.OAuthEvents
     {
+        OnCreatingTicket = context =>
+        {
+            // Fix for CS1061: The 'OAuthTokenResponse' class does not contain a definition for 'IdToken'.
+            // The 'IdToken' property is not part of the 'OAuthTokenResponse' class as per the provided type signatures.
+            // To fix this, we need to extract the 'id_token' from the 'Response' property of 'OAuthTokenResponse', which is a JsonDocument.
+
+            var idToken = context.TokenResponse?.Response?.RootElement.GetProperty("id_token").GetString();
+
+            if (!string.IsNullOrEmpty(idToken))
+            {
+                // Zapisz id_token do AuthenticationProperties,
+                // u¿ywaj¹c klucza, którego oczekuje GetTokenValue
+                context.Properties.Items[".Token.id_token"] = idToken;
+
+                // Mo¿esz te¿ zapisaæ inne tokeny w ten sposób, jeœli SaveTokens zawiedzie
+                // context.Properties.Items[".Token.access_token"] = context.AccessToken;
+            }
+
+            // Opcjonalnie: Mo¿esz tutaj dodaæ logowanie, aby zobaczyæ, co jest w context
+            // Console.WriteLine($"ID Token in OnCreatingTicket: {idToken}");
+            // Console.WriteLine($"Access Token in OnCreatingTicket: {context.AccessToken}");
+
+            return Task.CompletedTask;
+        },
+
         OnRemoteFailure = context =>
         {
             if (context.Failure?.Message != null && context.Failure.Message.Contains("access_denied", StringComparison.OrdinalIgnoreCase))

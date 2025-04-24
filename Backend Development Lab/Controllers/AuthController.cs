@@ -148,6 +148,7 @@ namespace Backend_Development_Lab.Controllers
 
             var accessToken = authenticateResult.Properties.GetTokenValue("access_token");
             var refreshToken = authenticateResult.Properties.GetTokenValue("refresh_token");
+            
 
             if (!string.IsNullOrEmpty(accessToken))
             {
@@ -158,17 +159,59 @@ namespace Backend_Development_Lab.Controllers
                 if (userInfoResponse.IsSuccessStatusCode)
                 {
                     var userInfoJson = await userInfoResponse.Content.ReadAsStringAsync();
-                    // Tutaj zdeserializuj userInfoJson (np. używając System.Text.Json)
-                    // i uzyskaj dostęp do pól jak 'picture', 'name' etc.
                     Console.WriteLine($"User Info from Google: {userInfoJson}");
-                    // np. var userInfo = System.Text.Json.JsonSerializer.Deserialize<GoogleUserInfo>(userInfoJson);
-                    // string pictureUrl = userInfo?.picture;
                 }
                 else
                 {
                     Console.WriteLine($"Failed to get user info: {userInfoResponse.StatusCode}");
                 }
             }
+            var idToken = authenticateResult.Properties.GetTokenValue("id_token");
+            Console.WriteLine($"Access Token: {accessToken}");
+            Console.WriteLine($"ID Token: {idToken}"); // Nie powinien być już null!
+            if (!string.IsNullOrEmpty(idToken))
+            {
+                try // Dobrze jest dodać try-catch wokół operacji na tokenach
+                {
+                    var handler = new JwtSecurityTokenHandler();
+                    // Sprawdź, czy token można odczytać (bez walidacji na tym etapie,
+                    // bo został już zweryfikowany przez middleware Google)
+                    if (handler.CanReadToken(idToken))
+                    {
+                        var jwtToken1 = handler.ReadJwtToken(idToken);
+
+                        Console.WriteLine("Decoded ID Token Claims:");
+                        foreach (var claim in jwtToken1.Claims)
+                        {
+                            Console.WriteLine($"{claim.Type}: {claim.Value}");
+                            // Tutaj możesz użyć tych claimów, np. claim.Type == "picture"
+                        }
+
+                        // Przykład pobrania konkretnego claima:
+                        var pictureClaim = jwtToken1.Claims.FirstOrDefault(c => c.Type == "picture");
+                        if (pictureClaim != null)
+                        {
+                            Console.WriteLine($"User Picture URL: {pictureClaim.Value}");
+                            // Możesz zapisać ten URL w swoim obiekcie User
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Cannot read the ID Token.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Loguj błąd dekodowania
+                    Console.WriteLine($"Error decoding ID Token: {ex.Message}");
+                    // Rozważ, czy kontynuować, czy zwrócić błąd
+                }
+            }
+
+            //===================
+
+
+
 
             // Pobierz oświadczenia (claims) od zewnętrznego dostawcy
             var externalPrincipal = authenticateResult.Principal;
