@@ -188,6 +188,9 @@ options.Scope.Add("email");
     };
 });
 
+builder.Services.AddHttpClient("PayPalApiClient");
+builder.Services.AddSingleton<IPaymentService, PaymentService>();
+
 // Rejestracja Autoryzacji (ju¿ pewnie masz, ale upewnij siê)
 builder.Services.AddAuthorization();
 
