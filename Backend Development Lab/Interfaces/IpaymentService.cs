@@ -9,7 +9,7 @@ namespace Backend_Development_Lab.Interfaces
         Task<Order[]> GetOrders();
         Task<Order?> GetOrderByIdAsync(Guid orderId); // Pobranie naszego zamówienia
         Task<Order?> GetOrderByPayPalIdAsync(string payPalOrderId); // Pobranie naszego zamówienia po ID PayPal
-        // Do przechowywania zamówień w pamięci
+
         void AddOrder(Order order);
         void UpdateOrder(Order order);
     }

@@ -17,7 +17,6 @@ namespace Backend_Development_Lab.Services
         private readonly string _payPalClientId;
         private readonly string _payPalClientSecret;
 
-        // Przechowywanie zamówień w pamięci (dla uproszczenia)
         private static readonly ConcurrentDictionary<Guid, Order> _orders = new ConcurrentDictionary<Guid, Order>();
         private static readonly ConcurrentDictionary<string, Guid> _payPalOrderIdIndex = new ConcurrentDictionary<string, Guid>();
 
@@ -25,10 +24,9 @@ namespace Backend_Development_Lab.Services
         public PaymentService(IConfiguration configuration, IHttpClientFactory httpClientFactory)
         {
             _configuration = configuration;
-            _httpClient = httpClientFactory.CreateClient("PayPalApiClient"); // Nazwany klient HttpClient
+            _httpClient = httpClientFactory.CreateClient("PayPalApiClient");
 
-            // Odczytaj konfigurację PayPal z appsettings lub User Secrets
-            _payPalApiBaseUrl = _configuration["PayPal:ApiBaseUrl"] ?? "https://api-m.sandbox.paypal.com"; // Domyślnie sandbox
+            _payPalApiBaseUrl = _configuration["PayPal:ApiBaseUrl"] ?? "https://api-m.sandbox.paypal.com";
             _payPalClientId = _configuration["PayPal:ClientId"] ?? throw new InvalidOperationException("PayPal ClientId not configured");
             _payPalClientSecret = _configuration["PayPal:ClientSecret"] ?? throw new InvalidOperationException("PayPal ClientSecret not configured");
         }
@@ -88,7 +86,6 @@ namespace Backend_Development_Lab.Services
                 var authResponse = await response.Content.ReadFromJsonAsync<PayPalAuthResponse>();
                 return authResponse?.access_token;
             }
-            // Log error
             Console.WriteLine($"Error getting PayPal access token: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}");
             return null;
         }
@@ -101,7 +98,6 @@ namespace Backend_Development_Lab.Services
                 return (null, null, "Failed to authenticate with PayPal.");
             }
 
-            // Utwórz nasze wewnętrzne zamówienie
             var internalOrder = new Order
             {
                 Amount = amount,
@@ -109,12 +105,12 @@ namespace Backend_Development_Lab.Services
                 Description = description,
                 Status = OrderStatus.Pending
             };
-            AddOrder(internalOrder); // Zapisz w pamięci
+            AddOrder(internalOrder);
 
 
             var payPalOrderRequest = new
             {
-                intent = "CAPTURE", // CAPTURE lub AUTHORIZE
+                intent = "CAPTURE",
                 purchase_units = new[]
                 {
                         new
@@ -127,8 +123,8 @@ namespace Backend_Development_Lab.Services
                 {
                     return_url = returnUrl,
                     cancel_url = cancelUrl,
-                    brand_name = "Moja Aplikacja Sklep", // Opcjonalnie
-                    user_action = "PAY_NOW" // Tekst na przycisku PayPal
+                    brand_name = "Moja Aplikacja Sklep",
+                    user_action = "PAY_NOW"
                 }
             };
 
@@ -137,16 +133,15 @@ namespace Backend_Development_Lab.Services
             request.Content = new StringContent(JsonSerializer.Serialize(payPalOrderRequest), Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request);
-            var responseContent = await response.Content.ReadAsStringAsync(); // Odczytaj zawartość odpowiedzi
+            var responseContent = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
             {
                 var payPalOrderResponse = JsonSerializer.Deserialize<PayPalOrderResponse>(responseContent);
                 if (payPalOrderResponse != null && !string.IsNullOrEmpty(payPalOrderResponse.id))
                 {
-                    // Zaktualizuj nasze wewnętrzne zamówienie o PayPalOrderId
                     internalOrder.PayPalOrderId = payPalOrderResponse.id;
-                    internalOrder.Status = OrderStatus.Processing; // Zmieniamy status, bo zamówienie zostało utworzone w PayPal
+                    internalOrder.Status = OrderStatus.Processing;
                     UpdateOrder(internalOrder);
 
                     var approvalLink = payPalOrderResponse.links?.FirstOrDefault(l => l.rel == "approve");
@@ -167,7 +162,6 @@ namespace Backend_Development_Lab.Services
             var accessToken = await GetPayPalAccessTokenAsync();
             if (string.IsNullOrEmpty(accessToken))
             {
-                // Log error
                 return null;
             }
 
@@ -175,20 +169,19 @@ namespace Backend_Development_Lab.Services
             if (internalOrder == null)
             {
                 Console.WriteLine($"Internal order not found for PayPal Order ID: {payPalOrderId}");
-                return null; // Nie znaleziono zamówienia
+                return null;
             }
 
-            // Sprawdź, czy zamówienie nie zostało już przechwycone
             if (internalOrder.Status == OrderStatus.Completed || internalOrder.Status == OrderStatus.Failed)
             {
                 Console.WriteLine($"Order {payPalOrderId} already processed. Status: {internalOrder.Status}");
-                return internalOrder; // Już przetworzone
+                return internalOrder;
             }
 
 
             var request = new HttpRequestMessage(HttpMethod.Post, $"{_payPalApiBaseUrl}/v2/checkout/orders/{payPalOrderId}/capture");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            request.Content = new StringContent("{}", Encoding.UTF8, "application/json"); // Puste ciało dla capture
+            request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request);
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -196,7 +189,6 @@ namespace Backend_Development_Lab.Services
             if (response.IsSuccessStatusCode)
             {
                 var captureResponse = JsonSerializer.Deserialize<PayPalCaptureResponse>(responseContent);
-                // Sprawdź status w odpowiedzi PayPal
                 if (captureResponse?.status == "COMPLETED")
                 {
                     internalOrder.Status = OrderStatus.Completed;
@@ -206,11 +198,11 @@ namespace Backend_Development_Lab.Services
                 }
                 else
                 {
-                    internalOrder.Status = OrderStatus.Failed; // Lub inny status błędu na podstawie odpowiedzi
+                    internalOrder.Status = OrderStatus.Failed;
                     internalOrder.UpdatedAt = DateTime.UtcNow;
                     UpdateOrder(internalOrder);
                     Console.WriteLine($"PayPal capture status for {payPalOrderId} was not COMPLETED: {captureResponse?.status} - {responseContent}");
-                    return internalOrder; // Zwróć zamówienie ze zaktualizowanym statusem błędu
+                    return internalOrder;
                 }
             }
             else
@@ -219,7 +211,7 @@ namespace Backend_Development_Lab.Services
                 internalOrder.UpdatedAt = DateTime.UtcNow;
                 UpdateOrder(internalOrder);
                 Console.WriteLine($"Error capturing PayPal order {payPalOrderId}: {response.StatusCode} - {responseContent}");
-                return internalOrder; // Zwróć zamówienie ze zaktualizowanym statusem błędu
+                return internalOrder;
             }
         }
 

@@ -10,7 +10,7 @@ namespace Backend_Development_Lab.Controllers
     public class PaymentsController : ControllerBase
     {
         private readonly IPaymentService _paymentService;
-        private readonly ILogger<PaymentsController> _logger; // Do logowania
+        private readonly ILogger<PaymentsController> _logger;
 
         public PaymentsController(IPaymentService paymentService, ILogger<PaymentsController> logger)
         {
@@ -27,13 +27,9 @@ namespace Backend_Development_Lab.Controllers
                 return BadRequest(ModelState);
             }
 
-            // URL-e powrotu do Twojej aplikacji
-            // WAŻNE: Muszą być publicznie dostępne, jeśli PayPal ma na nie przekierować.
-            // Dla testów lokalnych z np. ngrok lub bezpośrednio jeśli masz publiczny IP.
-            // W tym scenariuszu, gdzie klient sam sprawdza, mogą to być ścieżki w Twoim SPA.
             string baseUrl = $"{Request.Scheme}://{Request.Host}";
-            string returnUrl = $"{baseUrl}/api/payments/success"; // Endpoint, który obsłuży sukces
-            string cancelUrl = $"{baseUrl}/api/payments/cancel";   // Endpoint, który obsłuży anulowanie
+            string returnUrl = $"{baseUrl}/api/payments/success";
+            string cancelUrl = $"{baseUrl}/api/payments/cancel";
 
             _logger.LogInformation($"Creating PayPal order. Amount: {requestDto.Amount} {requestDto.Currency}. Return: {returnUrl}, Cancel: {cancelUrl}");
 
@@ -61,19 +57,14 @@ namespace Backend_Development_Lab.Controllers
         }
 
         // 2. Endpoint obsługujący pomyślne przekierowanie z PayPal
-        //    Użytkownik jest tu przekierowywany PO dokonaniu płatności w PayPal.
-        //    Tutaj odpytujemy PayPal o status płatności (capture).
-        [HttpGet("success")] // Lub inny URL skonfigurowany jako return_url
+        [HttpGet("success")]
         public async Task<IActionResult> PaymentSuccess([FromQuery] string token, [FromQuery(Name = "PayerID")] string payerId)
         {
-            // 'token' z query string to PayPal Order ID (w nowszym API PayPal)
-            // 'PayerID' jest również zwracany przez PayPal
             _logger.LogInformation($"Payment success callback. PayPal Order ID (token): {token}, PayerID: {payerId}");
 
             if (string.IsNullOrEmpty(token))
             {
                 _logger.LogWarning("PaymentSuccess: PayPal Order ID (token) is missing.");
-                // Zwróć użytkownika na stronę błędu lub odpowiedni widok w SPA
                 return BadRequest("Payment confirmation failed: Missing PayPal Order ID.");
             }
 
@@ -82,34 +73,26 @@ namespace Backend_Development_Lab.Controllers
             if (capturedOrder == null)
             {
                 _logger.LogError($"PaymentSuccess: Failed to capture or find order for PayPal Order ID: {token}");
-                // Zwróć użytkownika na stronę błędu
                 return StatusCode(StatusCodes.Status500InternalServerError, "Error processing payment after confirmation.");
             }
 
             if (capturedOrder.Status == OrderStatus.Completed)
             {
                 _logger.LogInformation($"Payment completed successfully for PayPal Order ID: {token}, Internal Order ID: {capturedOrder.Id}");
-                // Tutaj logika po udanej płatności, np.:
-                // - Przekieruj użytkownika na stronę podsumowania zamówienia w Twojej aplikacji
-                // - Wyświetl komunikat o sukcesie
-                // W kontekście API, możemy zwrócić dane zamówienia
                 return Ok(new { message = "Payment completed successfully!", orderId = capturedOrder.Id, payPalOrderId = capturedOrder.PayPalOrderId, status = capturedOrder.Status });
             }
             else
             {
                 _logger.LogWarning($"Payment for PayPal Order ID: {token} was not completed successfully after capture. Status: {capturedOrder.Status}");
-                // Płatność mogła się nie powieść na etapie capture lub miała inny status
-                // Zwróć użytkownika na stronę z informacją o problemie
                 return BadRequest(new { message = "Payment was not completed successfully.", orderId = capturedOrder.Id, status = capturedOrder.Status });
             }
         }
 
 
         // 3. Endpoint obsługujący anulowanie płatności przez użytkownika w PayPal
-        [HttpGet("cancel")] // Lub inny URL skonfigurowany jako cancel_url
+        [HttpGet("cancel")]
         public async Task<IActionResult> PaymentCancel([FromQuery] string token)
         {
-            // 'token' z query string to PayPal Order ID
             _logger.LogInformation($"Payment cancelled by user. PayPal Order ID (token): {token}");
 
             if (string.IsNullOrEmpty(token))
@@ -118,15 +101,14 @@ namespace Backend_Development_Lab.Controllers
                 return BadRequest("Payment cancellation information is incomplete.");
             }
 
-            // Znajdź zamówienie w naszej bazie i oznacz je jako anulowane
             var order = await _paymentService.GetOrderByPayPalIdAsync(token);
             if (order != null)
             {
-                if (order.Status != OrderStatus.Completed) // Nie zmieniaj statusu, jeśli już zapłacone
+                if (order.Status != OrderStatus.Completed)
                 {
                     order.Status = OrderStatus.Cancelled;
                     order.UpdatedAt = DateTime.UtcNow;
-                    _paymentService.UpdateOrder(order); // Załóżmy, że serwis ma metodę UpdateOrder
+                    _paymentService.UpdateOrder(order);
                     _logger.LogInformation($"Internal order {order.Id} (PayPal ID: {token}) marked as Cancelled.");
                 }
             }
@@ -135,15 +117,12 @@ namespace Backend_Development_Lab.Controllers
                 _logger.LogWarning($"PaymentCancel: Could not find internal order for PayPal ID {token} to mark as cancelled.");
             }
 
-            // Przekieruj użytkownika na odpowiednią stronę w Twojej aplikacji (np. koszyk)
-            // W kontekście API, możemy zwrócić informację
             return Ok(new { message = "Payment was cancelled by the user.", payPalOrderId = token });
         }
 
-        [HttpGet("orders")] // Lub inny URL skonfigurowany jako cancel_url
+        [HttpGet("orders")]
         public async Task<IActionResult> GetOrders()
         {
-            // Znajdź zamówienia w naszej bazie i oznacz je jako anulowane
             var orders = await _paymentService.GetOrders();
             if (orders != null)
             {
@@ -156,7 +135,7 @@ namespace Backend_Development_Lab.Controllers
             }
         }
 
-        [HttpPost("orders/{orderId}/update")] // Endpoint do ręcznego przechwytywania płatności
+        [HttpPost("orders/{orderId}/update")]
         public async Task<IActionResult> UpdatePayment([FromRoute] Guid orderId, [FromBody] OrderStatus status )
         {
             var order = await _paymentService.GetOrderByIdAsync(orderId);
